@@ -101,7 +101,7 @@ test("fromEnv: throws when search returns non-2xx", async (t) => {
 test("contextSize, model, accountId exposed on instance", () => {
     const p = new Cloudflare({
         accountId: "acc-123", apiToken: "tok", model: "@cf/openai/gpt-oss-120b",
-        contextSize: 128_000, fetchTimeoutMs: 1, pricing: samplePricing,
+        contextSize: 128_000, fetchTimeoutMs: 1, pricing: samplePricing, tokenizer: "heuristic",
     });
     assert.equal(p.contextSize, 128_000);
     assert.equal(p.model, "@cf/openai/gpt-oss-120b");
@@ -111,7 +111,7 @@ test("contextSize, model, accountId exposed on instance", () => {
 test("costFor: prompt+completion math from per-token rates", () => {
     const p = new Cloudflare({
         accountId: "x", apiToken: "y", model: "m", contextSize: 1, fetchTimeoutMs: 1,
-        pricing: samplePricing,
+        pricing: samplePricing, tokenizer: "heuristic",
     });
     // 1000 prompt × 350_000 + 100 completion × 750_000 = 350M + 75M = 425M pico
     assert.equal(p.costFor({ prompt: 1000, completion: 100, cached: 0, total: 1100 }), 425_000_000);
@@ -120,11 +120,73 @@ test("costFor: prompt+completion math from per-token rates", () => {
 test("countTokens: heuristic returns 0 for empty, ceil(len/4) otherwise", () => {
     const p = new Cloudflare({
         accountId: "x", apiToken: "y", model: "m", contextSize: 1, fetchTimeoutMs: 1,
-        pricing: samplePricing,
+        pricing: samplePricing, tokenizer: "heuristic",
     });
     assert.equal(p.countTokens(""), 0);
     assert.equal(p.countTokens("abcd"), 1);
     assert.equal(p.countTokens("abcde"), 2);
+});
+
+test("tokenizer dispatch: @cf/openai/* → cl100k", async (t) => {
+    const originalFetch = globalThis.fetch;
+    t.after(() => { globalThis.fetch = originalFetch; });
+    globalThis.fetch = (async () => mockSearchResponse({
+        name: "@cf/openai/gpt-oss-120b",
+        properties: [
+            { property_id: "context_window", value: "128000" },
+            { property_id: "price", value: [
+                { unit: "per M input tokens", price: 0.35, currency: "USD" },
+                { unit: "per M output tokens", price: 0.75, currency: "USD" },
+            ] },
+        ],
+    })) as unknown as typeof fetch;
+
+    const p = await Cloudflare.fromEnv({
+        CLOUDFLARE_ACCOUNT_ID: "x", CLOUDFLARE_API_TOKEN: "y",
+    }, "@cf/openai/gpt-oss-120b");
+    assert.equal(p.tokenizer, "cl100k");
+    assert.equal(p.countTokens("hello world"), 2);
+});
+
+test("tokenizer dispatch: @cf/meta/* → llama", async (t) => {
+    const originalFetch = globalThis.fetch;
+    t.after(() => { globalThis.fetch = originalFetch; });
+    globalThis.fetch = (async () => mockSearchResponse({
+        name: "@cf/meta/llama-3-8b-instruct",
+        properties: [
+            { property_id: "context_window", value: "8192" },
+            { property_id: "price", value: [
+                { unit: "per M input tokens", price: 0.282, currency: "USD" },
+                { unit: "per M output tokens", price: 0.827, currency: "USD" },
+            ] },
+        ],
+    })) as unknown as typeof fetch;
+
+    const p = await Cloudflare.fromEnv({
+        CLOUDFLARE_ACCOUNT_ID: "x", CLOUDFLARE_API_TOKEN: "y",
+    }, "@cf/meta/llama-3-8b-instruct");
+    assert.equal(p.tokenizer, "llama");
+    assert.equal(p.countTokens("hello world"), 3);
+});
+
+test("tokenizer dispatch: unknown publisher → heuristic", async (t) => {
+    const originalFetch = globalThis.fetch;
+    t.after(() => { globalThis.fetch = originalFetch; });
+    globalThis.fetch = (async () => mockSearchResponse({
+        name: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+        properties: [
+            { property_id: "context_window", value: "131072" },
+            { property_id: "price", value: [
+                { unit: "per M input tokens", price: 0.497, currency: "USD" },
+                { unit: "per M output tokens", price: 4.881, currency: "USD" },
+            ] },
+        ],
+    })) as unknown as typeof fetch;
+
+    const p = await Cloudflare.fromEnv({
+        CLOUDFLARE_ACCOUNT_ID: "x", CLOUDFLARE_API_TOKEN: "y",
+    }, "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b");
+    assert.equal(p.tokenizer, "heuristic");
 });
 
 test("pricing parse: USD per M tokens × 1e6 = pico per token (sanity)", async (t) => {

@@ -1,7 +1,31 @@
+import { encode as encodeCl100k } from "gpt-tokenizer/encoding/cl100k_base";
+import llamaTokenizer from "llama-tokenizer-js";
 import { chatCompletionStream, OpenAiHttpError } from "./openaiStream.ts";
 
 const DEFAULT_FETCH_TIMEOUT_MS = 600000;
 const CF_API_ROOT = "https://api.cloudflare.com/client/v4";
+
+// Tokenizer dispatch on the Cloudflare model's @cf/{publisher}/{name} prefix.
+// The publisher segment tells us which upstream family we're hitting; the
+// dispatch table maps it to a sync tokenizer. Open-weight Chinese/European
+// publishers (deepseek, moonshotai, google/gemma) fall through to the
+// heuristic — per-family wiring (gpt2 BPE for qwen, sentencepiece for
+// gemma) is later work.
+type TokenizerKind = "cl100k" | "llama" | "heuristic";
+
+const TOKENIZER_BY_PUBLISHER: ReadonlyMap<string, TokenizerKind> = new Map([
+    ["openai", "cl100k"],           // @cf/openai/gpt-oss-* (uses cl100k_base)
+    ["meta", "llama"],              // @cf/meta/llama-*
+    ["mistral", "llama"],           // @cf/mistral/mistral-* (BPE family approximation)
+]);
+
+// Cloudflare model ids are "@cf/{publisher}/{model}". Strip the @cf prefix
+// and take the second segment as publisher.
+const tokenizerForModel = (model: string): TokenizerKind => {
+    const segments = model.split("/");
+    const publisher = segments[0] === "@cf" && segments.length >= 2 ? segments[1] : undefined;
+    return publisher !== undefined ? TOKENIZER_BY_PUBLISHER.get(publisher) ?? "heuristic" : "heuristic";
+};
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -40,6 +64,7 @@ export type CloudflareConfig = {
     contextSize: number;
     fetchTimeoutMs: number;
     pricing: CloudflarePricing;
+    tokenizer: TokenizerKind;
 };
 
 export default class Cloudflare {
@@ -49,6 +74,7 @@ export default class Cloudflare {
     #contextSize: number;
     #fetchTimeoutMs: number;
     #pricing: CloudflarePricing;
+    #tokenizer: TokenizerKind;
 
     constructor(config: CloudflareConfig) {
         this.#accountId = config.accountId;
@@ -57,6 +83,7 @@ export default class Cloudflare {
         this.#contextSize = config.contextSize;
         this.#fetchTimeoutMs = config.fetchTimeoutMs;
         this.#pricing = config.pricing;
+        this.#tokenizer = config.tokenizer;
     }
 
     static async fromEnv(env: NodeJS.ProcessEnv, model: string): Promise<Cloudflare> {
@@ -77,6 +104,7 @@ export default class Cloudflare {
             contextSize: info.contextSize,
             fetchTimeoutMs,
             pricing: info.pricing,
+            tokenizer: tokenizerForModel(model),
         });
     }
 
@@ -85,12 +113,18 @@ export default class Cloudflare {
     get accountId(): string { return this.#accountId; }
     get pricing(): CloudflarePricing { return this.#pricing; }
 
-    // Heuristic. Workers AI tokenizers vary per model family (sentencepiece
-    // for Llama-family, tiktoken-derived for gpt-oss releases, etc.). Per-
-    // family dispatch is pass-2 work.
+    // Per-publisher dispatch, decided once from the model id's @cf/{pub}
+    // prefix and frozen on the instance.
     countTokens(text: string): number {
-        return text.length === 0 ? 0 : Math.ceil(text.length / 4);
+        if (text.length === 0) return 0;
+        switch (this.#tokenizer) {
+            case "cl100k": return encodeCl100k(text).length;
+            case "llama":  return llamaTokenizer.encode(text).length;
+            case "heuristic": return Math.ceil(text.length / 4);
+        }
     }
+
+    get tokenizer(): TokenizerKind { return this.#tokenizer; }
 
     // Cached tokens mirror prompt rate (no separate cached rate at the relay).
     costFor(usage: ProviderUsage): number {

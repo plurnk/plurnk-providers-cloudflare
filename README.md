@@ -43,7 +43,16 @@ Cloudflare does not expose a separate cached rate, so `cached_pico_per_token` mi
 
 ## tokenization
 
-Heuristic 4-chars-per-token. Workers AI tokenizers vary by model family (sentencepiece for Llama-family, tiktoken-derived for the OpenAI gpt-oss releases, etc.). Per-family tokenizer dispatch is pass-2 work.
+Per-publisher dispatch on the `@cf/{publisher}/{model}` prefix, decided once at `fromEnv` and frozen on the instance:
+
+| Publisher prefix | Tokenizer |
+|---|---|
+| `@cf/openai/*` | `cl100k_base` (gpt-oss releases use OpenAI's tiktoken family; via [gpt-tokenizer](https://www.npmjs.com/package/gpt-tokenizer)) |
+| `@cf/meta/*` | `llama` (via [llama-tokenizer-js](https://www.npmjs.com/package/llama-tokenizer-js)) |
+| `@cf/mistral/*` | `llama` (BPE family approximation) |
+| anything else | heuristic (~4 chars/token) |
+
+Open-weight publishers without a sync npm tokenizer (deepseek-ai, moonshotai, google's gemma releases) fall through to the heuristic. Per-family wiring is later work.
 
 ## license
 
