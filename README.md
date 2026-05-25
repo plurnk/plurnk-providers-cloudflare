@@ -22,12 +22,14 @@ const provider = await Cloudflare.fromEnv(process.env, "@cf/openai/gpt-oss-120b"
 
 ## env
 
+No fallback defaults — required vars throw at `fromEnv` if missing or unparseable. Defaults belong in `plurnk-service`'s `.env.example` cascade, not in library code.
+
 | Variable | Required | Notes |
 |---|---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | yes | Workers AI endpoints are account-scoped |
 | `CLOUDFLARE_API_TOKEN` | yes | Bearer token with Workers AI permission |
 | `PLURNK_REASON` | no | Ignored — Workers AI has no documented reasoning-toggle body param. Reasoning-capable models (DeepSeek R1 distills) emit `reasoning_content` deltas natively |
-| `PLURNK_PROVIDER_FETCH_TIMEOUT` | no | Universal fetch timeout in ms; default `600000` |
+| `PLURNK_FETCH_TIMEOUT` | yes | Universal fetch timeout in ms (PROVIDERS.md §3.9) |
 
 ## context window & pricing
 

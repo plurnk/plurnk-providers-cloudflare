@@ -4,6 +4,14 @@ import Cloudflare from "./Cloudflare.ts";
 
 const samplePricing = { prompt_pico_per_token: 350_000, completion_pico_per_token: 750_000, cached_pico_per_token: 350_000 };
 
+// Minimum env that satisfies all required guards in fromEnv. Tests that need
+// to exercise one specific knob override its key on top of this.
+const baseEnv = Object.freeze({
+    CLOUDFLARE_ACCOUNT_ID: "acc-123",
+    CLOUDFLARE_API_TOKEN: "tok-abc",
+    PLURNK_FETCH_TIMEOUT: "600000",
+});
+
 const mockSearchResponse = (entry: object) => ({
     ok: true,
     json: async () => ({ result: [entry], success: true }),
@@ -23,6 +31,22 @@ test("fromEnv: throws when CLOUDFLARE_API_TOKEN is unset", async () => {
     );
 });
 
+test("fromEnv: throws when PLURNK_FETCH_TIMEOUT is unset", async () => {
+    await assert.rejects(
+        () => Cloudflare.fromEnv({
+            CLOUDFLARE_ACCOUNT_ID: "acc-123", CLOUDFLARE_API_TOKEN: "tok-abc",
+        }, "@cf/openai/gpt-oss-120b"),
+        /PLURNK_FETCH_TIMEOUT must be set/,
+    );
+});
+
+test("fromEnv: throws when PLURNK_FETCH_TIMEOUT is non-numeric", async () => {
+    await assert.rejects(
+        () => Cloudflare.fromEnv({ ...baseEnv, PLURNK_FETCH_TIMEOUT: "abc" }, "@cf/openai/gpt-oss-120b"),
+        /PLURNK_FETCH_TIMEOUT must be a number/,
+    );
+});
+
 test("fromEnv: resolves contextSize + pricing from /ai/models/search", async (t) => {
     const originalFetch = globalThis.fetch;
     t.after(() => { globalThis.fetch = originalFetch; });
@@ -37,9 +61,7 @@ test("fromEnv: resolves contextSize + pricing from /ai/models/search", async (t)
         ],
     })) as unknown as typeof fetch;
 
-    const p = await Cloudflare.fromEnv({
-        CLOUDFLARE_ACCOUNT_ID: "acc-123", CLOUDFLARE_API_TOKEN: "tok-abc",
-    }, "@cf/openai/gpt-oss-120b");
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/openai/gpt-oss-120b");
     assert.equal(p.model, "@cf/openai/gpt-oss-120b");
     assert.equal(p.contextSize, 128_000);
     assert.deepEqual(p.pricing, samplePricing);
@@ -59,9 +81,7 @@ test("fromEnv: falls back to max_input_tokens when context_window absent", async
         ],
     })) as unknown as typeof fetch;
 
-    const p = await Cloudflare.fromEnv({
-        CLOUDFLARE_ACCOUNT_ID: "acc-123", CLOUDFLARE_API_TOKEN: "tok-abc",
-    }, "@cf/some/model");
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/some/model");
     assert.equal(p.contextSize, 32_768);
 });
 
@@ -74,9 +94,7 @@ test("fromEnv: throws when model not in search result.exactly", async (t) => {
     })) as unknown as typeof fetch;
 
     await assert.rejects(
-        () => Cloudflare.fromEnv({
-            CLOUDFLARE_ACCOUNT_ID: "acc-123", CLOUDFLARE_API_TOKEN: "tok-abc",
-        }, "@cf/missing/model"),
+        () => Cloudflare.fromEnv({ ...baseEnv }, "@cf/missing/model"),
         /no entry matching "@cf\/missing\/model" exactly/,
     );
 });
@@ -91,9 +109,7 @@ test("fromEnv: throws when search returns non-2xx", async (t) => {
     })) as unknown as typeof fetch;
 
     await assert.rejects(
-        () => Cloudflare.fromEnv({
-            CLOUDFLARE_ACCOUNT_ID: "acc-123", CLOUDFLARE_API_TOKEN: "tok-abc",
-        }, "@cf/x/y"),
+        () => Cloudflare.fromEnv({ ...baseEnv }, "@cf/x/y"),
         /\/ai\/models\/search returned 403/,
     );
 });
@@ -141,9 +157,7 @@ test("tokenizer dispatch: @cf/openai/* → cl100k", async (t) => {
         ],
     })) as unknown as typeof fetch;
 
-    const p = await Cloudflare.fromEnv({
-        CLOUDFLARE_ACCOUNT_ID: "x", CLOUDFLARE_API_TOKEN: "y",
-    }, "@cf/openai/gpt-oss-120b");
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/openai/gpt-oss-120b");
     assert.equal(p.tokenizer, "cl100k");
     assert.equal(p.countTokens("hello world"), 2);
 });
@@ -162,9 +176,7 @@ test("tokenizer dispatch: @cf/meta/* → llama", async (t) => {
         ],
     })) as unknown as typeof fetch;
 
-    const p = await Cloudflare.fromEnv({
-        CLOUDFLARE_ACCOUNT_ID: "x", CLOUDFLARE_API_TOKEN: "y",
-    }, "@cf/meta/llama-3-8b-instruct");
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/meta/llama-3-8b-instruct");
     assert.equal(p.tokenizer, "llama");
     assert.equal(p.countTokens("hello world"), 3);
 });
@@ -183,9 +195,7 @@ test("tokenizer dispatch: unknown publisher → heuristic", async (t) => {
         ],
     })) as unknown as typeof fetch;
 
-    const p = await Cloudflare.fromEnv({
-        CLOUDFLARE_ACCOUNT_ID: "x", CLOUDFLARE_API_TOKEN: "y",
-    }, "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b");
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b");
     assert.equal(p.tokenizer, "heuristic");
 });
 
@@ -203,9 +213,7 @@ test("pricing parse: USD per M tokens × 1e6 = pico per token (sanity)", async (
             ] },
         ],
     })) as unknown as typeof fetch;
-    const p = await Cloudflare.fromEnv({
-        CLOUDFLARE_ACCOUNT_ID: "x", CLOUDFLARE_API_TOKEN: "y",
-    }, "@cf/test");
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/test");
     assert.equal(p.pricing.prompt_pico_per_token, 500_000);
     assert.equal(p.pricing.completion_pico_per_token, 1_000_000);
 });

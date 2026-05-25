@@ -2,7 +2,6 @@ import { encode as encodeCl100k } from "gpt-tokenizer/encoding/cl100k_base";
 import llamaTokenizer from "llama-tokenizer-js";
 import { chatCompletionStream, OpenAiHttpError } from "./openaiStream.ts";
 
-const DEFAULT_FETCH_TIMEOUT_MS = 600000;
 const CF_API_ROOT = "https://api.cloudflare.com/client/v4";
 
 // Tokenizer dispatch on the Cloudflare model's @cf/{publisher}/{name} prefix.
@@ -95,9 +94,7 @@ export default class Cloudflare {
         if (apiToken === undefined || apiToken.length === 0) {
             throw new Error("cloudflare provider: CLOUDFLARE_API_TOKEN must be set");
         }
-        const fetchTimeoutMs = env.PLURNK_PROVIDER_FETCH_TIMEOUT !== undefined && env.PLURNK_PROVIDER_FETCH_TIMEOUT.length > 0
-            ? Number(env.PLURNK_PROVIDER_FETCH_TIMEOUT)
-            : DEFAULT_FETCH_TIMEOUT_MS;
+        const fetchTimeoutMs = parseRequiredInt(env.PLURNK_FETCH_TIMEOUT, "PLURNK_FETCH_TIMEOUT");
         const info = await fetchModelInfo({ accountId, apiToken, model, fetchTimeoutMs });
         return new Cloudflare({
             accountId, apiToken, model,
@@ -223,6 +220,17 @@ const fetchModelInfo = async ({
             cached_pico_per_token: promptRate,
         },
     };
+};
+
+const parseRequiredInt = (raw: string | undefined, name: string): number => {
+    if (raw === undefined || raw.length === 0) {
+        throw new Error(`cloudflare provider: ${name} must be set`);
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n)) {
+        throw new Error(`cloudflare provider: ${name} must be a number (got "${raw}")`);
+    }
+    return n;
 };
 
 export { OpenAiHttpError };
