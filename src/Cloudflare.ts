@@ -7,12 +7,12 @@
 
 import {
     OpenAICompatProvider,
+    computeCost,
     parseRequiredInt,
     requireEnv,
     tokenizerByPublisher,
     tokenizerFor,
     type Provider,
-    type ProviderUsage,
     type TokenizerFamily,
 } from "@plurnk/plurnk-providers";
 
@@ -45,9 +45,10 @@ export default class Cloudflare {
             contextSize,
             reasoningStyle: "none",
             countTokens: tokenizerFor(family),
-            // cached tokens mirror the prompt rate (no separate cached rate at the relay).
-            costFor: (usage: ProviderUsage) =>
-                Math.round(usage.prompt * pricing.prompt + usage.completion * pricing.completion),
+            // cached tokens mirror the prompt rate (no separate cached rate at the relay);
+            // reasoning bills with completion at the output rate.
+            costFor: (usage) =>
+                computeCost(usage, { input: pricing.prompt, output: pricing.completion, cached: pricing.prompt }),
         });
     }
 }

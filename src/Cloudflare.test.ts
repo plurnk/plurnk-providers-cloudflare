@@ -116,13 +116,24 @@ test("costFor: prompt+completion pico-per-token math from search rates", async (
     mockSearch(gptOss);
     const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/openai/gpt-oss-120b");
     // 1000 × 11_000 + 100 × 11_000 = 11_000_000 + 1_100_000 = 12_100_000
-    assert.equal(p.costFor({ prompt: 1000, completion: 100, cached: 0, total: 1100 }), 12_100_000);
+    assert.equal(p.costFor({ prompt: 1000, completion: 100, reasoning: 0, cached: 0, total: 1100 }), 12_100_000);
+});
+
+test("costFor: reasoning bills at the completion rate", async () => {
+    // Same $0.011/M = 11_000 pico/token rates from gptOss.
+    mockSearch(gptOss);
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/openai/gpt-oss-120b");
+    // (completion 100 + reasoning 50) × 11_000 = 1_650_000; prompt 1000 × 11_000 = 11_000_000.
+    assert.equal(
+        p.costFor({ prompt: 1000, completion: 100, reasoning: 50, cached: 0, total: 1150 }),
+        12_650_000,
+    );
 });
 
 test("costFor: returns 0 when the model has no price rates", async () => {
     mockSearch({ name: "@cf/free/model", properties: [{ property_id: "context_window", value: "8192" }] });
     const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/free/model");
-    assert.equal(p.costFor({ prompt: 1000, completion: 500, cached: 0, total: 1500 }), 0);
+    assert.equal(p.costFor({ prompt: 1000, completion: 500, reasoning: 0, cached: 0, total: 1500 }), 0);
 });
 
 test("pricing parse: USD per M tokens × 1e6 = pico per token", async () => {
@@ -138,8 +149,8 @@ test("pricing parse: USD per M tokens × 1e6 = pico per token", async () => {
     });
     const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/test/model");
     // $0.50/M → 500_000 pico/token; $1.00/M → 1_000_000 pico/token.
-    assert.equal(p.costFor({ prompt: 1, completion: 0, cached: 0, total: 1 }), 500_000);
-    assert.equal(p.costFor({ prompt: 0, completion: 1, cached: 0, total: 1 }), 1_000_000);
+    assert.equal(p.costFor({ prompt: 1, completion: 0, reasoning: 0, cached: 0, total: 1 }), 500_000);
+    assert.equal(p.costFor({ prompt: 0, completion: 1, reasoning: 0, cached: 0, total: 1 }), 1_000_000);
 });
 
 test("tokenizer dispatch: @cf/openai/* → cl100k (hello world = 2)", async () => {
