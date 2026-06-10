@@ -1,6 +1,6 @@
 {
     "name": "@plurnk/plurnk-providers-cloudflare",
-    "version": "0.2.5",
+    "version": "0.2.6",
     "description": "Cloudflare Workers AI provider for plurnk-service. Routes @cf/{...} aliases through Workers AI's OpenAI-compatible relay; resolves real per-token pricing and context_window from /ai/models/search at fromEnv time.",
     "type": "module",
     "license": "MIT",
@@ -37,6 +37,6 @@
         "typescript": "^6.0.3"
     },
     "dependencies": {
-        "@plurnk/plurnk-providers": "0.1.7"
+        "@plurnk/plurnk-providers": "0.1.8"
     }
 }
