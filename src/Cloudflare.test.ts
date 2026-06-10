@@ -61,8 +61,25 @@ test("fromEnv: throws when PLURNK_FETCH_TIMEOUT is unset", async () => {
 test("fromEnv: throws when PLURNK_FETCH_TIMEOUT is non-numeric", async () => {
     await assert.rejects(
         () => Cloudflare.fromEnv({ ...baseEnv, PLURNK_FETCH_TIMEOUT: "abc" }, "@cf/openai/gpt-oss-120b"),
-        /PLURNK_FETCH_TIMEOUT must be a number/,
+        /PLURNK_FETCH_TIMEOUT must be a non-negative integer/,
     );
+});
+
+test("generate failure carries the provider:cloudflare telemetry source (SPEC §12)", async () => {
+    const { ProviderError } = await import("@plurnk/plurnk-providers");
+    mock.method(globalThis, "fetch", async (url: string) => {
+        if (String(url).includes("/ai/models/search")) {
+            return new Response(JSON.stringify({ result: [gptOss], success: true }), { status: 200 });
+        }
+        return new Response("rate limited", { status: 429 });
+    });
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/openai/gpt-oss-120b");
+    await assert.rejects(() => p.generate({ messages: [] }), (err: unknown) => {
+        assert.ok(err instanceof ProviderError);
+        assert.equal(err.kind, "rate_limit");
+        assert.equal(err.toTelemetryEvent().source, "provider:cloudflare");
+        return true;
+    });
 });
 
 // — search probe —
