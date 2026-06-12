@@ -9,6 +9,7 @@ import {
     OpenAICompatProvider,
     computeCost,
     parseRequiredInt,
+    reasoningKnobsFromEnv,
     providerSource,
     requireEnv,
     tokenizerByPublisher,
@@ -51,6 +52,7 @@ export default class Cloudflare {
             costFor: (usage) =>
                 computeCost(usage, { input: pricing.prompt, output: pricing.completion, cached: pricing.prompt }),
             source: providerSource("cloudflare"),
+            ...reasoningKnobsFromEnv(env, "cloudflare"),
         });
     }
 }

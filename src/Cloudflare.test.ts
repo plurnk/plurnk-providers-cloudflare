@@ -8,6 +8,8 @@ const baseEnv = Object.freeze({
     CLOUDFLARE_ACCOUNT_ID: "acc-123",
     CLOUDFLARE_API_TOKEN: "tok-abc",
     PLURNK_FETCH_TIMEOUT: "600000",
+    PLURNK_PROVIDERS_THINKING: "0",
+    PLURNK_PROVIDERS_REASONING: "1",
 });
 
 // Mock the /ai/models/search probe. `entry` becomes the single result row.
