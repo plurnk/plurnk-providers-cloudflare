@@ -3,7 +3,7 @@
 // /ai/models/search probe (context window + per-token pricing) and the
 // publisher-prefix tokenizer dispatch; everything else (the generate spine,
 // usage mapping, reasoning translation) is the framework's. Workers AI has no
-// reasoning toggle, so reasoningStyle is "none" and PLURNK_REASON is ignored.
+// reasoning toggle, so reasoningStyle is "none" and PLURNK_PROVIDERS_REASON_LEVEL is ignored.
 
 import {
     OpenAICompatProvider,
