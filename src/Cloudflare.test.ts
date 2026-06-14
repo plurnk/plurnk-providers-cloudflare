@@ -8,7 +8,6 @@ const baseEnv = Object.freeze({
     CLOUDFLARE_ACCOUNT_ID: "acc-123",
     CLOUDFLARE_API_TOKEN: "tok-abc",
     PLURNK_FETCH_TIMEOUT: "600000",
-    PLURNK_PROVIDERS_THINKING: "0",
     PLURNK_PROVIDERS_REASONING: "1",
 });
 
@@ -76,7 +75,7 @@ test("generate failure carries the provider:cloudflare telemetry source (SPEC §
         return new Response("rate limited", { status: 429 });
     });
     const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/openai/gpt-oss-120b");
-    await assert.rejects(() => p.generate({ messages: [] }), (err: unknown) => {
+    await assert.rejects(() => p.generate({ runId: "r", messages: [] }), (err: unknown) => {
         assert.ok(err instanceof ProviderError);
         assert.equal(err.kind, "rate_limit");
         assert.equal(err.toTelemetryEvent().source, "provider:cloudflare");
