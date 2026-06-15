@@ -10,6 +10,7 @@ import {
     computeCost,
     parseRequiredInt,
     reasoningBudgetFromEnv,
+    planFromEnv,
     providerSource,
     requireEnv,
     tokenizerByPublisher,
@@ -53,6 +54,7 @@ export default class Cloudflare {
             costFor: (usage) =>
                 computeCost(usage, { input: pricing.prompt, output: pricing.completion, cached: pricing.prompt }),
             source: providerSource("cloudflare"),
+            plan: planFromEnv(env, "cloudflare"),
         });
     }
 }
