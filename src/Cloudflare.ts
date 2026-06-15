@@ -3,13 +3,13 @@
 // /ai/models/search probe (context window + per-token pricing) and the
 // publisher-prefix tokenizer dispatch; everything else (the generate spine,
 // usage mapping, reasoning translation) is the framework's. Workers AI has no
-// reasoning toggle, so reasoningStyle is "none" and PLURNK_PROVIDERS_REASON_LEVEL is ignored.
+// reasoning toggle, so reasoningStyle is "none" and PLURNK_PROVIDERS_REASONING_BUDGET is ignored.
 
 import {
     OpenAICompatProvider,
     computeCost,
     parseRequiredInt,
-    reasoningKnobsFromEnv,
+    reasoningBudgetFromEnv,
     providerSource,
     requireEnv,
     tokenizerByPublisher,
@@ -46,13 +46,13 @@ export default class Cloudflare {
             headers: { Authorization: `Bearer ${apiToken}` },
             contextSize,
             reasoningStyle: "none",
+            reasoningBudget: reasoningBudgetFromEnv(env, "cloudflare"),
             countTokens: tokenizerFor(family),
             // cached tokens mirror the prompt rate (no separate cached rate at the relay);
             // reasoning bills with completion at the output rate.
             costFor: (usage) =>
                 computeCost(usage, { input: pricing.prompt, output: pricing.completion, cached: pricing.prompt }),
             source: providerSource("cloudflare"),
-            ...reasoningKnobsFromEnv(env, "cloudflare"),
         });
     }
 }
