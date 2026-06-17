@@ -28,8 +28,9 @@ No fallback defaults — required vars throw at `fromEnv` if missing or unparsea
 |---|---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | yes | Workers AI endpoints are account-scoped |
 | `CLOUDFLARE_API_TOKEN` | yes | Bearer token with Workers AI permission |
-| `PLURNK_REASON` | no | Ignored — Workers AI has no documented reasoning-toggle body param. Reasoning-capable models (DeepSeek R1 distills) emit `reasoning_content` deltas natively |
-| `PLURNK_FETCH_TIMEOUT` | yes | Universal fetch timeout in ms (PROVIDERS.md §3.9) |
+| `PLURNK_PROVIDERS_REASONING_BUDGET` | no | Ignored — Workers AI has no documented reasoning-toggle body param. Reasoning-capable models (DeepSeek R1 distills) emit `reasoning_content` deltas natively |
+| `PLURNK_FETCH_TIMEOUT` | yes | Universal fetch timeout in ms (SPEC §4) |
+| `PLURNK_PROVIDER_RETRY_ATTEMPTS` | yes | Transient-failure retry budget (SPEC §4): `0` disables; `N` retries on 429/5xx/timeout/network with exponential backoff, honoring `Retry-After`. |
 
 ## context window & pricing
 
