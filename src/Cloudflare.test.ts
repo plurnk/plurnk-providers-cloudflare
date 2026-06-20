@@ -36,18 +36,25 @@ const gptOss = {
 
 // — fromEnv env guards —
 
-test("fromEnv: throws when CLOUDFLARE_ACCOUNT_ID is unset", async () => {
+test("fromEnv: throws when neither CLOUDFLARE_ACCOUNT_ID nor CF_ACCOUNT_ID is set", async () => {
     await assert.rejects(
         () => Cloudflare.fromEnv({}, "@cf/openai/gpt-oss-120b"),
-        /CLOUDFLARE_ACCOUNT_ID must be set/,
+        /CLOUDFLARE_ACCOUNT_ID or CF_ACCOUNT_ID must be set/,
     );
 });
 
-test("fromEnv: throws when CLOUDFLARE_API_TOKEN is unset", async () => {
+test("fromEnv: throws when neither CLOUDFLARE_API_TOKEN nor CF_API_TOKEN is set", async () => {
     await assert.rejects(
         () => Cloudflare.fromEnv({ CLOUDFLARE_ACCOUNT_ID: "acc-123" }, "@cf/openai/gpt-oss-120b"),
-        /CLOUDFLARE_API_TOKEN must be set/,
+        /CLOUDFLARE_API_TOKEN or CF_API_TOKEN must be set/,
     );
+});
+
+test("fromEnv: accepts the Wrangler CF_ACCOUNT_ID / CF_API_TOKEN aliases", async () => {
+    const rest = { PLURNK_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_REASONING_BUDGET: "0", PLURNK_PROVIDER_RETRY_ATTEMPTS: "0" };
+    const calls = mockSearch(gptOss);
+    await Cloudflare.fromEnv({ ...rest, CF_ACCOUNT_ID: "acc-cf", CF_API_TOKEN: "tok-cf" }, "@cf/openai/gpt-oss-120b");
+    assert.ok(calls.some((u) => u.includes("/accounts/acc-cf/")), `CF_ACCOUNT_ID alias used: ${calls[0]}`);
 });
 
 test("fromEnv: throws when PLURNK_FETCH_TIMEOUT is unset", async () => {
