@@ -9,7 +9,7 @@ const baseEnv = Object.freeze({
     CLOUDFLARE_API_TOKEN: "tok-abc",
     PLURNK_FETCH_TIMEOUT: "600000",
     PLURNK_PROVIDERS_REASONING_BUDGET: "0",
-    PLURNK_PROVIDER_RETRY_ATTEMPTS: "0",
+    PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0",
 });
 
 // Mock the /ai/models/search probe. `entry` becomes the single result row.
@@ -51,7 +51,7 @@ test("fromEnv: throws when neither CLOUDFLARE_API_TOKEN nor CF_API_TOKEN is set"
 });
 
 test("fromEnv: accepts the Wrangler CF_ACCOUNT_ID / CF_API_TOKEN aliases", async () => {
-    const rest = { PLURNK_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_REASONING_BUDGET: "0", PLURNK_PROVIDER_RETRY_ATTEMPTS: "0" };
+    const rest = { PLURNK_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_REASONING_BUDGET: "0", PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0" };
     const calls = mockSearch(gptOss);
     await Cloudflare.fromEnv({ ...rest, CF_ACCOUNT_ID: "acc-cf", CF_API_TOKEN: "tok-cf" }, "@cf/openai/gpt-oss-120b");
     assert.ok(calls.some((u) => u.includes("/accounts/acc-cf/")), `CF_ACCOUNT_ID alias used: ${calls[0]}`);

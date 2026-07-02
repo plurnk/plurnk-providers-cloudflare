@@ -48,7 +48,7 @@ export default class Cloudflare {
             contextSize,
             reasoningStyle: "none",
             reasoningBudget: reasoningBudgetFromEnv(env, "cloudflare"),
-            retryAttempts: parseRequiredInt(env.PLURNK_PROVIDER_RETRY_ATTEMPTS, "PLURNK_PROVIDER_RETRY_ATTEMPTS", "cloudflare"),
+            retryAttempts: parseRequiredInt(env.PLURNK_PROVIDERS_RETRY_ATTEMPTS, "PLURNK_PROVIDERS_RETRY_ATTEMPTS", "cloudflare"),
             countTokens: tokenizerFor(family),
             // cached tokens mirror the prompt rate (no separate cached rate at the relay);
             // reasoning bills with completion at the output rate.
