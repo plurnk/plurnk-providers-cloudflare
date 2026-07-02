@@ -34,7 +34,7 @@ export default class Cloudflare {
         // Accept the Wrangler/CLI CF_* aliases alongside the official CLOUDFLARE_* vars.
         const accountId = requireEnv(env.CLOUDFLARE_ACCOUNT_ID || env.CF_ACCOUNT_ID, "CLOUDFLARE_ACCOUNT_ID or CF_ACCOUNT_ID", "cloudflare");
         const apiToken = requireEnv(env.CLOUDFLARE_API_TOKEN || env.CF_API_TOKEN, "CLOUDFLARE_API_TOKEN or CF_API_TOKEN", "cloudflare");
-        const fetchTimeoutMs = parseRequiredInt(env.PLURNK_FETCH_TIMEOUT, "PLURNK_FETCH_TIMEOUT", "cloudflare");
+        const fetchTimeoutMs = parseRequiredInt(env.PLURNK_PROVIDERS_FETCH_TIMEOUT, "PLURNK_PROVIDERS_FETCH_TIMEOUT", "cloudflare");
 
         const { contextSize, pricing } = await fetchModelInfo({ accountId, apiToken, model, fetchTimeoutMs });
 

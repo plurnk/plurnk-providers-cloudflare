@@ -7,7 +7,7 @@ import Cloudflare from "./Cloudflare.ts";
 const baseEnv = Object.freeze({
     CLOUDFLARE_ACCOUNT_ID: "acc-123",
     CLOUDFLARE_API_TOKEN: "tok-abc",
-    PLURNK_FETCH_TIMEOUT: "600000",
+    PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000",
     PLURNK_PROVIDERS_REASONING_BUDGET: "0",
     PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0",
 });
@@ -51,26 +51,26 @@ test("fromEnv: throws when neither CLOUDFLARE_API_TOKEN nor CF_API_TOKEN is set"
 });
 
 test("fromEnv: accepts the Wrangler CF_ACCOUNT_ID / CF_API_TOKEN aliases", async () => {
-    const rest = { PLURNK_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_REASONING_BUDGET: "0", PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0" };
+    const rest = { PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_REASONING_BUDGET: "0", PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0" };
     const calls = mockSearch(gptOss);
     await Cloudflare.fromEnv({ ...rest, CF_ACCOUNT_ID: "acc-cf", CF_API_TOKEN: "tok-cf" }, "@cf/openai/gpt-oss-120b");
     assert.ok(calls.some((u) => u.includes("/accounts/acc-cf/")), `CF_ACCOUNT_ID alias used: ${calls[0]}`);
 });
 
-test("fromEnv: throws when PLURNK_FETCH_TIMEOUT is unset", async () => {
+test("fromEnv: throws when PLURNK_PROVIDERS_FETCH_TIMEOUT is unset", async () => {
     await assert.rejects(
         () => Cloudflare.fromEnv(
             { CLOUDFLARE_ACCOUNT_ID: "acc-123", CLOUDFLARE_API_TOKEN: "tok-abc" },
             "@cf/openai/gpt-oss-120b",
         ),
-        /PLURNK_FETCH_TIMEOUT must be set/,
+        /PLURNK_PROVIDERS_FETCH_TIMEOUT must be set/,
     );
 });
 
-test("fromEnv: throws when PLURNK_FETCH_TIMEOUT is non-numeric", async () => {
+test("fromEnv: throws when PLURNK_PROVIDERS_FETCH_TIMEOUT is non-numeric", async () => {
     await assert.rejects(
-        () => Cloudflare.fromEnv({ ...baseEnv, PLURNK_FETCH_TIMEOUT: "abc" }, "@cf/openai/gpt-oss-120b"),
-        /PLURNK_FETCH_TIMEOUT must be a non-negative integer/,
+        () => Cloudflare.fromEnv({ ...baseEnv, PLURNK_PROVIDERS_FETCH_TIMEOUT: "abc" }, "@cf/openai/gpt-oss-120b"),
+        /PLURNK_PROVIDERS_FETCH_TIMEOUT must be a non-negative integer/,
     );
 });
 
