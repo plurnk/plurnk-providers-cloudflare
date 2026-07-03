@@ -10,6 +10,7 @@ import {
     computeCost,
     parseRequiredInt,
     thinkingFromEnv,
+    parseRequiredFloat,
     providerSource,
     requireEnv,
     type Provider,
@@ -36,6 +37,8 @@ export default class Cloudflare {
             headers: { Authorization: `Bearer ${apiToken}` },
             contextSize,
             reasoningStyle: "none",
+            grammarTemperature: parseRequiredFloat(env.PLURNK_PROVIDERS_GRAMMAR_TEMPERATURE, "PLURNK_PROVIDERS_GRAMMAR_TEMPERATURE", "cloudflare", 0),
+            grammarRepeatPenalty: parseRequiredFloat(env.PLURNK_PROVIDERS_GRAMMAR_REPEAT_PENALTY, "PLURNK_PROVIDERS_GRAMMAR_REPEAT_PENALTY", "cloudflare", 0),
             thinking: thinkingFromEnv(env, "cloudflare"),
             retryAttempts: parseRequiredInt(env.PLURNK_PROVIDERS_RETRY_ATTEMPTS, "PLURNK_PROVIDERS_RETRY_ATTEMPTS", "cloudflare"),
             // cached tokens mirror the prompt rate (no separate cached rate at the relay);
