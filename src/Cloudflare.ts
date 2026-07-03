@@ -37,8 +37,9 @@ export default class Cloudflare {
             headers: { Authorization: `Bearer ${apiToken}` },
             contextSize,
             reasoningStyle: "none",
-            grammarTemperature: parseRequiredFloat(env.PLURNK_PROVIDERS_GRAMMAR_TEMPERATURE, "PLURNK_PROVIDERS_GRAMMAR_TEMPERATURE", "cloudflare", 0),
-            grammarRepeatPenalty: parseRequiredFloat(env.PLURNK_PROVIDERS_GRAMMAR_REPEAT_PENALTY, "PLURNK_PROVIDERS_GRAMMAR_REPEAT_PENALTY", "cloudflare", 0),
+            temperature: parseRequiredFloat(env.PLURNK_PROVIDERS_TEMPERATURE, "PLURNK_PROVIDERS_TEMPERATURE", "cloudflare", 0),
+            repeatPenalty: parseRequiredFloat(env.PLURNK_PROVIDERS_REPEAT_PENALTY, "PLURNK_PROVIDERS_REPEAT_PENALTY", "cloudflare", 0),
+            retryDelayMs: parseRequiredInt(env.PLURNK_PROVIDERS_RETRY_DELAY, "PLURNK_PROVIDERS_RETRY_DELAY", "cloudflare"),
             thinking: thinkingFromEnv(env, "cloudflare"),
             retryAttempts: parseRequiredInt(env.PLURNK_PROVIDERS_RETRY_ATTEMPTS, "PLURNK_PROVIDERS_RETRY_ATTEMPTS", "cloudflare"),
             // cached tokens mirror the prompt rate (no separate cached rate at the relay);
