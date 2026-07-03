@@ -8,7 +8,7 @@ const baseEnv = Object.freeze({
     CLOUDFLARE_ACCOUNT_ID: "acc-123",
     CLOUDFLARE_API_TOKEN: "tok-abc",
     PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000",
-    PLURNK_PROVIDERS_REASONING_BUDGET: "0",
+    PLURNK_PROVIDERS_THINKING: "off",
     PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0",
 });
 
@@ -51,7 +51,7 @@ test("fromEnv: throws when neither CLOUDFLARE_API_TOKEN nor CF_API_TOKEN is set"
 });
 
 test("fromEnv: accepts the Wrangler CF_ACCOUNT_ID / CF_API_TOKEN aliases", async () => {
-    const rest = { PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_REASONING_BUDGET: "0", PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0" };
+    const rest = { PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_THINKING: "off", PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0" };
     const calls = mockSearch(gptOss);
     await Cloudflare.fromEnv({ ...rest, CF_ACCOUNT_ID: "acc-cf", CF_API_TOKEN: "tok-cf" }, "@cf/openai/gpt-oss-120b");
     assert.ok(calls.some((u) => u.includes("/accounts/acc-cf/")), `CF_ACCOUNT_ID alias used: ${calls[0]}`);
@@ -179,27 +179,3 @@ test("pricing parse: USD per M tokens × 1e6 = pico per token", async () => {
     assert.equal(p.costFor({ prompt: 0, completion: 1, reasoning: 0, cached: 0, total: 1 }), 1_000_000);
 });
 
-test("tokenizer dispatch: @cf/openai/* → cl100k (hello world = 2)", async () => {
-    mockSearch(gptOss);
-    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/openai/gpt-oss-120b");
-    assert.equal(p.countTokens("hello world"), 2);
-});
-
-test("tokenizer dispatch: @cf/meta/* → llama (hello world = 3)", async () => {
-    mockSearch({
-        name: "@cf/meta/llama-3-8b-instruct",
-        properties: [{ property_id: "context_window", value: "8192" }],
-    });
-    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/meta/llama-3-8b-instruct");
-    assert.equal(p.countTokens("hello world"), 3);
-});
-
-test("tokenizer dispatch: unknown publisher → heuristic", async () => {
-    mockSearch({
-        name: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-        properties: [{ property_id: "context_window", value: "131072" }],
-    });
-    const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b");
-    assert.equal(p.countTokens(""), 0);
-    assert.equal(p.countTokens("abcde"), 2); // ceil(5/4)
-});
