@@ -10,6 +10,7 @@ import {
     computeCost,
     parseRequiredInt,
     thinkingFromEnv,
+    dataCaptureFromEnv,
     parseRequiredFloat,
     providerSource,
     requireEnv,
@@ -42,6 +43,8 @@ export default class Cloudflare {
             retryDelayMs: parseRequiredInt(env.PLURNK_PROVIDERS_RETRY_DELAY, "PLURNK_PROVIDERS_RETRY_DELAY", "cloudflare"),
             thinking: thinkingFromEnv(env, "cloudflare"),
             retryAttempts: parseRequiredInt(env.PLURNK_PROVIDERS_RETRY_ATTEMPTS, "PLURNK_PROVIDERS_RETRY_ATTEMPTS", "cloudflare"),
+            // Opt-in data capture (#36), off by default, per-alias-scopable.
+            ...dataCaptureFromEnv(env, "cloudflare"),
             // cached tokens mirror the prompt rate (no separate cached rate at the relay);
             // reasoning bills with completion at the output rate.
             costFor: (usage) =>
