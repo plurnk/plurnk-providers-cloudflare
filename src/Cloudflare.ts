@@ -29,14 +29,14 @@ export default class Cloudflare {
         const apiToken = requireEnv(env.CLOUDFLARE_API_TOKEN || env.CF_API_TOKEN, "CLOUDFLARE_API_TOKEN or CF_API_TOKEN", "cloudflare");
         const fetchTimeoutMs = parseRequiredInt(env.PLURNK_PROVIDERS_FETCH_TIMEOUT, "PLURNK_PROVIDERS_FETCH_TIMEOUT", "cloudflare");
 
-        const { contextSize, pricing } = await fetchModelInfo({ accountId, apiToken, model, fetchTimeoutMs });
+        const { contextWindow, pricing } = await fetchModelInfo({ accountId, apiToken, model, fetchTimeoutMs });
 
         return new OpenAICompatProvider({
             model,
             url: `${CF_API_ROOT}/accounts/${accountId}/ai/v1/chat/completions`,
             fetchTimeoutMs,
             headers: { Authorization: `Bearer ${apiToken}` },
-            contextSize,
+            contextWindow,
             reasoningStyle: "none",
             temperature: parseRequiredFloat(env.PLURNK_PROVIDERS_TEMPERATURE, "PLURNK_PROVIDERS_TEMPERATURE", "cloudflare", 0),
             repeatPenalty: parseRequiredFloat(env.PLURNK_PROVIDERS_REPEAT_PENALTY, "PLURNK_PROVIDERS_REPEAT_PENALTY", "cloudflare", 0),
@@ -68,7 +68,7 @@ type CfSearchResponse = { result?: CfModelEntry[]; success?: boolean };
 
 const fetchModelInfo = async ({
     accountId, apiToken, model, fetchTimeoutMs,
-}: { accountId: string; apiToken: string; model: string; fetchTimeoutMs: number }): Promise<{ contextSize: number; pricing: Pricing }> => {
+}: { accountId: string; apiToken: string; model: string; fetchTimeoutMs: number }): Promise<{ contextWindow: number; pricing: Pricing }> => {
     const url = `${CF_API_ROOT}/accounts/${accountId}/ai/models/search?search=${encodeURIComponent(model)}`;
     const res = await fetch(url, {
         headers: { Authorization: `Bearer ${apiToken}` },
@@ -88,8 +88,8 @@ const fetchModelInfo = async ({
     // Context window. Prefer context_window; fall back to max_input_tokens.
     const ctxProp = props.find((p) => p.property_id === "context_window")
         ?? props.find((p) => p.property_id === "max_input_tokens");
-    const contextSize = ctxProp !== undefined && typeof ctxProp.value === "string" ? Number(ctxProp.value) : NaN;
-    if (!Number.isFinite(contextSize) || contextSize <= 0) {
+    const contextWindow = ctxProp !== undefined && typeof ctxProp.value === "string" ? Number(ctxProp.value) : NaN;
+    if (!Number.isFinite(contextWindow) || contextWindow <= 0) {
         throw new Error(`Cloudflare /ai/models/search has no context_window for "${model}"`);
     }
 
@@ -101,5 +101,5 @@ const fetchModelInfo = async ({
     // USD per 1M tokens × 1e12 pico/USD ÷ 1e6 tokens/M = price × 1e6 pico/token.
     const prompt = promptEntry !== undefined ? promptEntry.price * 1e6 : 0;
     const completion = completionEntry !== undefined ? completionEntry.price * 1e6 : 0;
-    return { contextSize, pricing: { prompt, completion } };
+    return { contextWindow, pricing: { prompt, completion } };
 };

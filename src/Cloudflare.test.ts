@@ -93,11 +93,11 @@ test("generate failure carries the provider:cloudflare telemetry source (SPEC §
 
 // — search probe —
 
-test("fromEnv: resolves contextSize from /ai/models/search and hits the search URL", async () => {
+test("fromEnv: resolves contextWindow from /ai/models/search and hits the search URL", async () => {
     const calls = mockSearch(gptOss);
     const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/openai/gpt-oss-120b");
     assert.equal(p.model, "@cf/openai/gpt-oss-120b");
-    assert.equal(p.contextSize, 131072);
+    assert.equal(p.contextWindow, 131072);
     assert.equal(
         calls[0],
         "https://api.cloudflare.com/client/v4/accounts/acc-123/ai/models/search?search=%40cf%2Fopenai%2Fgpt-oss-120b",
@@ -116,7 +116,7 @@ test("fromEnv: falls back to max_input_tokens when context_window absent", async
         ],
     });
     const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/some/model");
-    assert.equal(p.contextSize, 32768);
+    assert.equal(p.contextWindow, 32768);
 });
 
 test("fromEnv: throws when model not in search result exactly", async () => {
