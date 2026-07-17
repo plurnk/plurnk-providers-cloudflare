@@ -8,7 +8,7 @@ const baseEnv = Object.freeze({
     CLOUDFLARE_ACCOUNT_ID: "acc-123",
     CLOUDFLARE_API_TOKEN: "tok-abc",
     PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000",
-    PLURNK_PROVIDERS_REASONING: "off", PLURNK_PROVIDERS_TEMPERATURE: "0.2", PLURNK_PROVIDERS_REPEAT_PENALTY: "1.15", PLURNK_PROVIDERS_FREQUENCY_PENALTY: "0.4", PLURNK_PROVIDERS_RETRY_DELAY: "1", PLURNK_PROVIDERS_PROBE_ATTEMPTS: "3", PLURNK_PROVIDERS_PROBE_DELAY: "1",
+    PLURNK_PROVIDERS_REASONING: "off", PLURNK_PROVIDERS_TEMPERATURE: "0.2", PLURNK_PROVIDERS_REPEAT_PENALTY: "1.15", PLURNK_PROVIDERS_FREQUENCY_PENALTY: "0.4", PLURNK_PROVIDERS_REASONING_RESERVE: "10%", PLURNK_PROVIDERS_COMPLETION_RESERVE: "25%", PLURNK_PROVIDERS_RETRY_DELAY: "1", PLURNK_PROVIDERS_PROBE_ATTEMPTS: "3", PLURNK_PROVIDERS_PROBE_DELAY: "1",
     PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0",
 });
 
@@ -51,7 +51,7 @@ test("fromEnv: throws when neither CLOUDFLARE_API_TOKEN nor CF_API_TOKEN is set"
 });
 
 test("fromEnv: accepts the Wrangler CF_ACCOUNT_ID / CF_API_TOKEN aliases", async () => {
-    const rest = { PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_REASONING: "off", PLURNK_PROVIDERS_TEMPERATURE: "0.2", PLURNK_PROVIDERS_REPEAT_PENALTY: "1.15", PLURNK_PROVIDERS_FREQUENCY_PENALTY: "0.4", PLURNK_PROVIDERS_RETRY_DELAY: "1", PLURNK_PROVIDERS_PROBE_ATTEMPTS: "3", PLURNK_PROVIDERS_PROBE_DELAY: "1", PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0" };
+    const rest = { PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_REASONING: "off", PLURNK_PROVIDERS_TEMPERATURE: "0.2", PLURNK_PROVIDERS_REPEAT_PENALTY: "1.15", PLURNK_PROVIDERS_FREQUENCY_PENALTY: "0.4", PLURNK_PROVIDERS_REASONING_RESERVE: "10%", PLURNK_PROVIDERS_COMPLETION_RESERVE: "25%", PLURNK_PROVIDERS_RETRY_DELAY: "1", PLURNK_PROVIDERS_PROBE_ATTEMPTS: "3", PLURNK_PROVIDERS_PROBE_DELAY: "1", PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0" };
     const calls = mockSearch(gptOss);
     await Cloudflare.fromEnv({ ...rest, CF_ACCOUNT_ID: "acc-cf", CF_API_TOKEN: "tok-cf" }, "@cf/openai/gpt-oss-120b");
     assert.ok(calls.some((u) => u.includes("/accounts/acc-cf/")), `CF_ACCOUNT_ID alias used: ${calls[0]}`);
@@ -83,7 +83,7 @@ test("generate failure carries the provider:cloudflare telemetry source (SPEC §
         return new Response("rate limited", { status: 429 });
     });
     const p = await Cloudflare.fromEnv({ ...baseEnv }, "@cf/openai/gpt-oss-120b");
-    await assert.rejects(() => p.generate({ runId: "r", messages: [] }), (err: unknown) => {
+    await assert.rejects(() => p.generate({ workerId: "r", messages: [] }), (err: unknown) => {
         assert.ok(err instanceof ProviderError);
         assert.equal(err.kind, "rate_limit");
         assert.equal(err.toTelemetryEvent().source, "provider:cloudflare");

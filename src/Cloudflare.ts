@@ -15,6 +15,7 @@ import {
     providerSource,
     requireEnv,
     type Provider,
+    envelopeFromEnv,
 } from "@plurnk/plurnk-providers";
 
 const CF_API_ROOT = "https://api.cloudflare.com/client/v4";
@@ -41,6 +42,8 @@ export default class Cloudflare {
             temperature: parseRequiredFloat(env.PLURNK_PROVIDERS_TEMPERATURE, "PLURNK_PROVIDERS_TEMPERATURE", "cloudflare", 0),
             repeatPenalty: parseRequiredFloat(env.PLURNK_PROVIDERS_REPEAT_PENALTY, "PLURNK_PROVIDERS_REPEAT_PENALTY", "cloudflare", 0),
             frequencyPenalty: parseRequiredFloat(env.PLURNK_PROVIDERS_FREQUENCY_PENALTY, "PLURNK_PROVIDERS_FREQUENCY_PENALTY", "cloudflare", 0),
+            // #507: envelope reserves (window-fraction floor, absolute overrides).
+            ...envelopeFromEnv(env, "cloudflare"),
             retryDelayMs: parseRequiredInt(env.PLURNK_PROVIDERS_RETRY_DELAY, "PLURNK_PROVIDERS_RETRY_DELAY", "cloudflare"),
             reasoning: reasoningFromEnv(env, "cloudflare"),
             retryAttempts: parseRequiredInt(env.PLURNK_PROVIDERS_RETRY_ATTEMPTS, "PLURNK_PROVIDERS_RETRY_ATTEMPTS", "cloudflare"),
