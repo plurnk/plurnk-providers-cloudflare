@@ -127,6 +127,25 @@ test("fromEnv: throws when model not in search result exactly", async () => {
     );
 });
 
+test("fromEnv: resolves Unified Billing model metadata from the native provider pass-through", async () => {
+    mockSearch({ name: "@cf/some/other-model", properties: [] });
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "moonshotai/kimi-k3");
+    assert.equal(p.model, "moonshotai/kimi-k3");
+    assert.equal(p.contextWindow, 1_048_576);
+    assert.equal(
+        p.costFor({ prompt: 10, cached: 5, completion: 2, reasoning: 1, total: 18 }),
+        5 * 3_000_000 + 5 * 300_000 + 3 * 15_000_000,
+    );
+});
+
+test("fromEnv: fails closed when a Unified Billing model has no exact native metadata", async () => {
+    mockSearch({ name: "@cf/some/other-model", properties: [] });
+    await assert.rejects(
+        () => Cloudflare.fromEnv({ ...baseEnv }, "unknown/missing-model"),
+        /no authoritative pass-through metadata/,
+    );
+});
+
 test("fromEnv: throws when search returns non-2xx", async () => {
     mock.method(globalThis, "fetch", async () => new Response("forbidden", { status: 403 }));
     await assert.rejects(
@@ -178,4 +197,3 @@ test("pricing parse: USD per M tokens × 1e6 = pico per token", async () => {
     assert.equal(p.costFor({ prompt: 1, completion: 0, reasoning: 0, cached: 0, total: 1 }), 500_000);
     assert.equal(p.costFor({ prompt: 0, completion: 1, reasoning: 0, cached: 0, total: 1 }), 1_000_000);
 });
-

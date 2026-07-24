@@ -1,6 +1,6 @@
 # @plurnk/plurnk-providers-cloudflare
 
-Cloudflare Workers AI provider for [plurnk-service](https://github.com/plurnk/plurnk-service). Routes `@cf/{publisher}/{model}` aliases through Workers AI's OpenAI-compatible chat-completions endpoint.
+Cloudflare Workers AI provider for [plurnk-service](https://github.com/plurnk/plurnk-service). Routes Cloudflare-hosted `@cf/{publisher}/{model}` and Unified Billing `provider/model` aliases through Workers AI's OpenAI-compatible chat-completions endpoint.
 
 ## install
 
@@ -18,7 +18,7 @@ import Cloudflare from "@plurnk/plurnk-providers-cloudflare";
 const provider = await Cloudflare.fromEnv(process.env, "@cf/openai/gpt-oss-120b");
 ```
 
-`@cf/{publisher}/{model}` aliases are used verbatim — Workers AI's own namespace, no prefix stripping. plurnk-service's alias system resolves `PLURNK_MODEL_<name>=cloudflare/@cf/openai/gpt-oss-120b` cleanly because the first slash terminates `provider=cloudflare`.
+Model aliases are used verbatim. plurnk-service's alias system resolves both `PLURNK_MODEL_<name>=cloudflare/@cf/openai/gpt-oss-120b` and `PLURNK_MODEL_<name>=cloudflare/moonshotai/kimi-k3` cleanly because the first slash terminates `provider=cloudflare`.
 
 ## env
 
@@ -34,15 +34,16 @@ No fallback defaults — required vars throw at `fromEnv` if missing or unparsea
 
 ## context window & pricing
 
-Both real, both pulled at `fromEnv` time from `GET /accounts/{id}/ai/models/search?search={alias}`. Cloudflare's catalog response carries each model's metadata as a `properties[]` array of `{property_id, value}` entries:
+For `@cf/` models, both are pulled at `fromEnv` time from `GET /accounts/{id}/ai/models/search?search={alias}`. Cloudflare's catalog response carries each model's metadata as a `properties[]` array of `{property_id, value}` entries:
 
 - `context_window` — string value, parsed as Number for `contextSize`
 - `price` — value is an array of `{unit, price, currency}` entries:
   - `"per M input tokens"` → `prompt_pico_per_token = price × 1e6`
+  - `"per M cached input tokens"` → `cached_pico_per_token = price × 1e6`
   - `"per M output tokens"` → `completion_pico_per_token = price × 1e6`
   - (Math: USD per 1M tokens × 1e12 pico/USD ÷ 1e6 tokens/M = `price × 1e6` pico/token)
 
-Cloudflare does not expose a separate cached rate, so `cached_pico_per_token` mirrors `prompt_pico_per_token`. Most Workers AI requests have `cached_tokens = 0` regardless.
+For Unified Billing `provider/model` IDs absent from Workers AI's model search, the provider resolves the exact native-provider row from `@plurnk/plurnk-models`. Cloudflare documents Unified Billing inference pricing as passed through without markup, making that provider-specific row authoritative. Missing context or pricing fails construction; no other provider's rate and no zero-price fallback is used. When a model has no separate cached rate, cached input mirrors ordinary input.
 
 ## tokenization
 

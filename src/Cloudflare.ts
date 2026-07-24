@@ -17,6 +17,7 @@ import {
     type Provider,
     envelopeFromEnv,
 } from "@plurnk/plurnk-providers";
+import { lookup } from "@plurnk/plurnk-models";
 
 const CF_API_ROOT = "https://api.cloudflare.com/client/v4";
 
@@ -52,13 +53,13 @@ export default class Cloudflare {
             // cached tokens mirror the prompt rate (no separate cached rate at the relay);
             // reasoning bills with completion at the output rate.
             costFor: (usage) =>
-                computeCost(usage, { input: pricing.prompt, output: pricing.completion, cached: pricing.prompt }),
+                computeCost(usage, { input: pricing.prompt, output: pricing.completion, cached: pricing.cached }),
             source: providerSource("cloudflare"),
         });
     }
 }
 
-type Pricing = { prompt: number; completion: number };
+type Pricing = { prompt: number; cached: number; completion: number };
 
 // Cloudflare's /ai/models/search response shape:
 //   { result: [{ name, properties: [{ property_id, value }, ...], ... }], success: true, ... }
@@ -84,6 +85,7 @@ const fetchModelInfo = async ({
     const data = (await res.json()) as CfSearchResponse;
     const entry = data.result?.find((m) => m.name === model);
     if (entry === undefined) {
+        if (!model.startsWith("@cf/")) return unifiedModelInfo(model);
         throw new Error(`Cloudflare /ai/models/search has no entry matching "${model}" exactly`);
     }
     const props = entry.properties ?? [];
@@ -100,9 +102,37 @@ const fetchModelInfo = async ({
     const priceProp = props.find((p) => p.property_id === "price");
     const priceEntries: CfPriceEntry[] = priceProp !== undefined && Array.isArray(priceProp.value) ? priceProp.value : [];
     const promptEntry = priceEntries.find((e) => e.unit === "per M input tokens");
+    const cachedEntry = priceEntries.find((e) => e.unit === "per M cached input tokens");
     const completionEntry = priceEntries.find((e) => e.unit === "per M output tokens");
     // USD per 1M tokens × 1e12 pico/USD ÷ 1e6 tokens/M = price × 1e6 pico/token.
     const prompt = promptEntry !== undefined ? promptEntry.price * 1e6 : 0;
+    const cached = cachedEntry !== undefined ? cachedEntry.price * 1e6 : prompt;
     const completion = completionEntry !== undefined ? completionEntry.price * 1e6 : 0;
-    return { contextWindow, pricing: { prompt, completion } };
+    return { contextWindow, pricing: { prompt, cached, completion } };
+};
+
+// Unified Billing third-party ids are `provider/model`. Cloudflare documents
+// that inference pricing is passed through without markup, so the native
+// provider's exact models.dev row is authoritative when Workers AI's own
+// catalog omits the routed model. A miss remains fatal: no guessed/free rates.
+const unifiedModelInfo = (model: string): { contextWindow: number; pricing: Pricing } => {
+    const slash = model.indexOf("/");
+    if (slash <= 0 || slash === model.length - 1) {
+        throw new Error(`Cloudflare Unified model "${model}" must be provider/model`);
+    }
+    const provider = model.slice(0, slash);
+    const providerModel = model.slice(slash + 1);
+    const info = lookup(provider, providerModel);
+    if (info === null || info.cost === undefined) {
+        throw new Error(`Cloudflare Unified model "${model}" has no authoritative pass-through metadata`);
+    }
+    const { inputPer1M, outputPer1M, cacheReadPer1M = inputPer1M } = info.cost;
+    return {
+        contextWindow: info.contextWindow,
+        pricing: {
+            prompt: inputPer1M * 1e6,
+            cached: cacheReadPer1M * 1e6,
+            completion: outputPer1M * 1e6,
+        },
+    };
 };
