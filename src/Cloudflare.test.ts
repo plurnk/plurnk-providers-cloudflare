@@ -1,10 +1,15 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
 import Cloudflare from "./Cloudflare.ts";
+
+const shippedEnv = parseEnv(readFileSync(new URL("../.env.defaults", import.meta.url), "utf8"));
 
 // Minimum env that satisfies all required guards in fromEnv. Tests that need
 // to exercise one specific knob override its key on top of this.
 const baseEnv = Object.freeze({
+    ...shippedEnv,
     CLOUDFLARE_ACCOUNT_ID: "acc-123",
     CLOUDFLARE_API_TOKEN: "tok-abc",
     PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000",
@@ -51,7 +56,11 @@ test("fromEnv: throws when neither CLOUDFLARE_API_TOKEN nor CF_API_TOKEN is set"
 });
 
 test("fromEnv: accepts the Wrangler CF_ACCOUNT_ID / CF_API_TOKEN aliases", async () => {
-    const rest = { PLURNK_PROVIDERS_FETCH_TIMEOUT: "600000", PLURNK_PROVIDERS_REASONING: "off", PLURNK_PROVIDERS_TEMPERATURE: "0.2", PLURNK_PROVIDERS_REPEAT_PENALTY: "1.15", PLURNK_PROVIDERS_FREQUENCY_PENALTY: "0.4", PLURNK_PROVIDERS_REASONING_RESERVE: "10%", PLURNK_PROVIDERS_COMPLETION_RESERVE: "25%", PLURNK_PROVIDERS_RETRY_DELAY: "1", PLURNK_PROVIDERS_PROBE_ATTEMPTS: "3", PLURNK_PROVIDERS_PROBE_DELAY: "1", PLURNK_PROVIDERS_RETRY_ATTEMPTS: "0" };
+    const {
+        CLOUDFLARE_ACCOUNT_ID: _accountId,
+        CLOUDFLARE_API_TOKEN: _apiToken,
+        ...rest
+    } = baseEnv;
     const calls = mockSearch(gptOss);
     await Cloudflare.fromEnv({ ...rest, CF_ACCOUNT_ID: "acc-cf", CF_API_TOKEN: "tok-cf" }, "@cf/openai/gpt-oss-120b");
     assert.ok(calls.some((u) => u.includes("/accounts/acc-cf/")), `CF_ACCOUNT_ID alias used: ${calls[0]}`);
@@ -60,7 +69,7 @@ test("fromEnv: accepts the Wrangler CF_ACCOUNT_ID / CF_API_TOKEN aliases", async
 test("fromEnv: throws when PLURNK_PROVIDERS_FETCH_TIMEOUT is unset", async () => {
     await assert.rejects(
         () => Cloudflare.fromEnv(
-            { CLOUDFLARE_ACCOUNT_ID: "acc-123", CLOUDFLARE_API_TOKEN: "tok-abc" },
+            { ...baseEnv, PLURNK_PROVIDERS_FETCH_TIMEOUT: undefined },
             "@cf/openai/gpt-oss-120b",
         ),
         /PLURNK_PROVIDERS_FETCH_TIMEOUT must be set/,
@@ -127,7 +136,7 @@ test("fromEnv: throws when model not in search result exactly", async () => {
     );
 });
 
-test("fromEnv: resolves Unified Billing model metadata from the native provider pass-through", async () => {
+test("fromEnv: resolves Kimi K3 from the shipped Cloudflare Unified catalog", async () => {
     mockSearch({ name: "@cf/some/other-model", properties: [] });
     const p = await Cloudflare.fromEnv({ ...baseEnv }, "moonshotai/kimi-k3");
     assert.equal(p.model, "moonshotai/kimi-k3");
@@ -138,11 +147,28 @@ test("fromEnv: resolves Unified Billing model metadata from the native provider 
     );
 });
 
-test("fromEnv: fails closed when a Unified Billing model has no exact native metadata", async () => {
+test("fromEnv: uses Cloudflare's route-specific DeepSeek V4 Pro window", async () => {
+    mockSearch({ name: "@cf/some/other-model", properties: [] });
+    const p = await Cloudflare.fromEnv({ ...baseEnv }, "deepseek/deepseek-v4-pro");
+    assert.equal(p.contextWindow, 131_072);
+    assert.equal(
+        p.costFor({ prompt: 10, cached: 5, completion: 2, reasoning: 1, total: 18 }),
+        5 * 435_000 + 5 * 3_625 + 3 * 870_000,
+    );
+});
+
+test("fromEnv: fails closed when a Unified Billing model has no shipped metadata", async () => {
     mockSearch({ name: "@cf/some/other-model", properties: [] });
     await assert.rejects(
         () => Cloudflare.fromEnv({ ...baseEnv }, "unknown/missing-model"),
-        /no authoritative pass-through metadata/,
+        /absent from CLOUDFLARE_UNIFIED_MODELS/,
+    );
+});
+
+test("fromEnv: fails closed when the shipped Unified catalog is malformed", async () => {
+    await assert.rejects(
+        () => Cloudflare.fromEnv({ ...baseEnv, CLOUDFLARE_UNIFIED_MODELS: "{}]" }, "moonshotai/kimi-k3"),
+        /CLOUDFLARE_UNIFIED_MODELS must be valid JSON/,
     );
 });
 

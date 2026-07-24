@@ -17,9 +17,11 @@ import {
     type Provider,
     envelopeFromEnv,
 } from "@plurnk/plurnk-providers";
-import { lookup } from "@plurnk/plurnk-models";
 
-const CF_API_ROOT = "https://api.cloudflare.com/client/v4";
+const PICO_USD_PER_USD = 1_000_000_000_000;
+const TOKENS_PER_MILLION = 1_000_000;
+const picoPerToken = (usdPerMillion: number): number =>
+    usdPerMillion * PICO_USD_PER_USD / TOKENS_PER_MILLION;
 
 // Tokenizer dispatch on the Cloudflare model's @cf/{publisher}/{name} prefix.
 // The publisher is the SECOND segment, so index 1. Open-weight publishers
@@ -29,13 +31,15 @@ export default class Cloudflare {
         // Accept the Wrangler/CLI CF_* aliases alongside the official CLOUDFLARE_* vars.
         const accountId = requireEnv(env.CLOUDFLARE_ACCOUNT_ID || env.CF_ACCOUNT_ID, "CLOUDFLARE_ACCOUNT_ID or CF_ACCOUNT_ID", "cloudflare");
         const apiToken = requireEnv(env.CLOUDFLARE_API_TOKEN || env.CF_API_TOKEN, "CLOUDFLARE_API_TOKEN or CF_API_TOKEN", "cloudflare");
+        const baseUrl = requireEnv(env.CLOUDFLARE_BASE_URL, "CLOUDFLARE_BASE_URL", "cloudflare").replace(/\/+$/, "");
+        const unifiedModels = parseUnifiedModels(requireEnv(env.CLOUDFLARE_UNIFIED_MODELS, "CLOUDFLARE_UNIFIED_MODELS", "cloudflare"));
         const fetchTimeoutMs = parseRequiredInt(env.PLURNK_PROVIDERS_FETCH_TIMEOUT, "PLURNK_PROVIDERS_FETCH_TIMEOUT", "cloudflare");
 
-        const { contextWindow, pricing } = await fetchModelInfo({ accountId, apiToken, model, fetchTimeoutMs });
+        const { contextWindow, pricing } = await fetchModelInfo({ baseUrl, accountId, apiToken, model, fetchTimeoutMs, unifiedModels });
 
         return new OpenAICompatProvider({
             model,
-            url: `${CF_API_ROOT}/accounts/${accountId}/ai/v1/chat/completions`,
+            url: `${baseUrl}/accounts/${accountId}/ai/v1/chat/completions`,
             fetchTimeoutMs,
             headers: { Authorization: `Bearer ${apiToken}` },
             contextWindow,
@@ -60,6 +64,13 @@ export default class Cloudflare {
 }
 
 type Pricing = { prompt: number; cached: number; completion: number };
+type UnifiedModel = {
+    contextWindow: number;
+    inputPerMillion: number;
+    cachedInputPerMillion: number;
+    outputPerMillion: number;
+};
+type UnifiedModels = Readonly<Record<string, UnifiedModel>>;
 
 // Cloudflare's /ai/models/search response shape:
 //   { result: [{ name, properties: [{ property_id, value }, ...], ... }], success: true, ... }
@@ -71,9 +82,9 @@ type CfModelEntry = { name: string; properties?: CfProperty[] };
 type CfSearchResponse = { result?: CfModelEntry[]; success?: boolean };
 
 const fetchModelInfo = async ({
-    accountId, apiToken, model, fetchTimeoutMs,
-}: { accountId: string; apiToken: string; model: string; fetchTimeoutMs: number }): Promise<{ contextWindow: number; pricing: Pricing }> => {
-    const url = `${CF_API_ROOT}/accounts/${accountId}/ai/models/search?search=${encodeURIComponent(model)}`;
+    baseUrl, accountId, apiToken, model, fetchTimeoutMs, unifiedModels,
+}: { baseUrl: string; accountId: string; apiToken: string; model: string; fetchTimeoutMs: number; unifiedModels: UnifiedModels }): Promise<{ contextWindow: number; pricing: Pricing }> => {
+    const url = `${baseUrl}/accounts/${accountId}/ai/models/search?search=${encodeURIComponent(model)}`;
     const res = await fetch(url, {
         headers: { Authorization: `Bearer ${apiToken}` },
         signal: AbortSignal.timeout(fetchTimeoutMs),
@@ -85,7 +96,7 @@ const fetchModelInfo = async ({
     const data = (await res.json()) as CfSearchResponse;
     const entry = data.result?.find((m) => m.name === model);
     if (entry === undefined) {
-        if (!model.startsWith("@cf/")) return unifiedModelInfo(model);
+        if (!model.startsWith("@cf/")) return unifiedModelInfo(model, unifiedModels);
         throw new Error(`Cloudflare /ai/models/search has no entry matching "${model}" exactly`);
     }
     const props = entry.properties ?? [];
@@ -105,34 +116,55 @@ const fetchModelInfo = async ({
     const cachedEntry = priceEntries.find((e) => e.unit === "per M cached input tokens");
     const completionEntry = priceEntries.find((e) => e.unit === "per M output tokens");
     // USD per 1M tokens × 1e12 pico/USD ÷ 1e6 tokens/M = price × 1e6 pico/token.
-    const prompt = promptEntry !== undefined ? promptEntry.price * 1e6 : 0;
-    const cached = cachedEntry !== undefined ? cachedEntry.price * 1e6 : prompt;
-    const completion = completionEntry !== undefined ? completionEntry.price * 1e6 : 0;
+    const prompt = promptEntry !== undefined ? picoPerToken(promptEntry.price) : 0;
+    const cached = cachedEntry !== undefined ? picoPerToken(cachedEntry.price) : prompt;
+    const completion = completionEntry !== undefined ? picoPerToken(completionEntry.price) : 0;
     return { contextWindow, pricing: { prompt, cached, completion } };
 };
 
-// Unified Billing third-party ids are `provider/model`. Cloudflare documents
-// that inference pricing is passed through without markup, so the native
-// provider's exact models.dev row is authoritative when Workers AI's own
-// catalog omits the routed model. A miss remains fatal: no guessed/free rates.
-const unifiedModelInfo = (model: string): { contextWindow: number; pricing: Pricing } => {
-    const slash = model.indexOf("/");
-    if (slash <= 0 || slash === model.length - 1) {
-        throw new Error(`Cloudflare Unified model "${model}" must be provider/model`);
+const isFiniteNonNegative = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0;
+
+const parseUnifiedModels = (raw: string): UnifiedModels => {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (cause) {
+        throw new Error("cloudflare provider: CLOUDFLARE_UNIFIED_MODELS must be valid JSON", { cause });
     }
-    const provider = model.slice(0, slash);
-    const providerModel = model.slice(slash + 1);
-    const info = lookup(provider, providerModel);
-    if (info === null || info.cost === undefined) {
-        throw new Error(`Cloudflare Unified model "${model}" has no authoritative pass-through metadata`);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("cloudflare provider: CLOUDFLARE_UNIFIED_MODELS must be a JSON object");
     }
-    const { inputPer1M, outputPer1M, cacheReadPer1M = inputPer1M } = info.cost;
+    for (const [model, value] of Object.entries(parsed)) {
+        if (
+            value === null
+            || typeof value !== "object"
+            || Array.isArray(value)
+            || !Number.isInteger((value as UnifiedModel).contextWindow)
+            || (value as UnifiedModel).contextWindow <= 0
+            || !isFiniteNonNegative((value as UnifiedModel).inputPerMillion)
+            || !isFiniteNonNegative((value as UnifiedModel).cachedInputPerMillion)
+            || !isFiniteNonNegative((value as UnifiedModel).outputPerMillion)
+        ) {
+            throw new Error(`cloudflare provider: CLOUDFLARE_UNIFIED_MODELS has invalid metadata for "${model}"`);
+        }
+    }
+    return parsed as UnifiedModels;
+};
+
+// Cloudflare omits some documented Unified routes from /ai/models/search.
+// Their explicit shipped catalog is the source of truth; a miss remains fatal.
+const unifiedModelInfo = (model: string, unifiedModels: UnifiedModels): { contextWindow: number; pricing: Pricing } => {
+    const info = unifiedModels[model];
+    if (info === undefined) {
+        throw new Error(`Cloudflare Unified model "${model}" is absent from CLOUDFLARE_UNIFIED_MODELS`);
+    }
     return {
         contextWindow: info.contextWindow,
         pricing: {
-            prompt: inputPer1M * 1e6,
-            cached: cacheReadPer1M * 1e6,
-            completion: outputPer1M * 1e6,
+            prompt: picoPerToken(info.inputPerMillion),
+            cached: picoPerToken(info.cachedInputPerMillion),
+            completion: picoPerToken(info.outputPerMillion),
         },
     };
 };

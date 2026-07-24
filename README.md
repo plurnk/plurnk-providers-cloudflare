@@ -22,12 +22,17 @@ Model aliases are used verbatim. plurnk-service's alias system resolves both `PL
 
 ## env
 
-No fallback defaults — required vars throw at `fromEnv` if missing or unparseable. Defaults belong in `plurnk-service`'s `.env.example` cascade, not in library code.
+No fallback defaults — required vars throw at `fromEnv` if missing or
+unparseable. This package owns and ships its operational floor in
+`.env.defaults`; operator overrides belong in `~/.plurnk/.env` or the project
+`.env`.
 
 | Variable | Required | Notes |
 |---|---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | yes | Workers AI endpoints are account-scoped. Alias `CF_ACCOUNT_ID` also accepted |
 | `CLOUDFLARE_API_TOKEN` | yes | Bearer token with Workers AI permission. Alias `CF_API_TOKEN` also accepted |
+| `CLOUDFLARE_BASE_URL` | yes | Shipped Cloudflare API root; operator-overridable |
+| `CLOUDFLARE_UNIFIED_MODELS` | yes | Shipped JSON catalog for documented Unified routes absent from `/ai/models/search` |
 | `PLURNK_PROVIDERS_REASONING_BUDGET` | no | Ignored — Workers AI has no documented reasoning-toggle body param. Reasoning-capable models (DeepSeek R1 distills) emit `reasoning_content` deltas natively |
 | `PLURNK_PROVIDERS_FETCH_TIMEOUT` | yes | Universal fetch timeout in ms (SPEC §4) |
 | `PLURNK_PROVIDERS_RETRY_ATTEMPTS` | yes | Transient-failure retry budget (SPEC §4): `0` disables; `N` retries on 429/5xx/timeout/network with exponential backoff, honoring `Retry-After`. |
@@ -43,7 +48,12 @@ For `@cf/` models, both are pulled at `fromEnv` time from `GET /accounts/{id}/ai
   - `"per M output tokens"` → `completion_pico_per_token = price × 1e6`
   - (Math: USD per 1M tokens × 1e12 pico/USD ÷ 1e6 tokens/M = `price × 1e6` pico/token)
 
-For Unified Billing `provider/model` IDs absent from Workers AI's model search, the provider resolves the exact native-provider row from `@plurnk/plurnk-models`. Cloudflare documents Unified Billing inference pricing as passed through without markup, making that provider-specific row authoritative. Missing context or pricing fails construction; no other provider's rate and no zero-price fallback is used. When a model has no separate cached rate, cached input mirrors ordinary input.
+For Unified Billing `provider/model` IDs absent from Workers AI's model search,
+the provider requires an exact row in `CLOUDFLARE_UNIFIED_MODELS`. The shipped
+catalog records Cloudflare's route-specific context window and the native
+provider's USD-per-million rates, which Cloudflare passes through without
+inference markup. Missing or malformed metadata fails construction; no guessed
+context and no zero-price fallback is used.
 
 ## tokenization
 
