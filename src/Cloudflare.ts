@@ -34,6 +34,7 @@ export default class Cloudflare {
         const baseUrl = requireEnv(env.CLOUDFLARE_BASE_URL, "CLOUDFLARE_BASE_URL", "cloudflare").replace(/\/+$/, "");
         const unifiedModels = parseUnifiedModels(requireEnv(env.CLOUDFLARE_UNIFIED_MODELS, "CLOUDFLARE_UNIFIED_MODELS", "cloudflare"));
         const fetchTimeoutMs = parseRequiredInt(env.PLURNK_PROVIDERS_FETCH_TIMEOUT, "PLURNK_PROVIDERS_FETCH_TIMEOUT", "cloudflare");
+        const streamIdleTimeoutMs = parseRequiredInt(env.PLURNK_PROVIDERS_STREAM_IDLE_TIMEOUT, "PLURNK_PROVIDERS_STREAM_IDLE_TIMEOUT", "cloudflare");
 
         const { contextWindow, pricing } = await fetchModelInfo({ baseUrl, accountId, apiToken, model, fetchTimeoutMs, unifiedModels });
 
@@ -41,6 +42,7 @@ export default class Cloudflare {
             model,
             url: `${baseUrl}/accounts/${accountId}/ai/v1/chat/completions`,
             fetchTimeoutMs,
+            streamIdleTimeoutMs,
             headers: { Authorization: `Bearer ${apiToken}` },
             contextWindow,
             reasoningStyle: "none",
